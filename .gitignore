@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+
+daemon.log
+daemon.log.*
+webui-daemon.log
+webui-daemon.log.*
+
+.estop_token
+config.json
+
+vendor/

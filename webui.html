@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OSR-Control 控制台</title>
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #0a1210;
+    --panel: rgba(18, 32, 27, .78);
+    --panel2: rgba(12, 24, 20, .62);
+    --line: rgba(90, 190, 145, .22);
+    --txt: #e9f3ee;
+    --dim: #8ba39a;
+    --accent: #3ddc84;
+    --accent-dim: rgba(61, 220, 132, .18);
+    --alert-bg: #1f8a4d;
+    --alert-fg: #eafff2;
+    --alert-line: rgba(120, 255, 180, .5);
+  }
+
+  body[data-state="emu"] {
+    --bg: radial-gradient(1100px 680px at 72% 6%, #11503a 0%, #0b241b 48%, #06110c 100%);
+    --panel: rgba(18, 44, 34, .82);
+    --line: rgba(80, 210, 150, .26);
+    --accent: #3ddc84;
+    --accent-dim: rgba(61, 220, 132, .18);
+    --alert-bg: #17914f;
+    --alert-fg: #eafff2;
+    --alert-line: rgba(140, 255, 190, .55);
+  }
+
+  body[data-state="real"] {
+    --bg: radial-gradient(1100px 680px at 72% 6%, #521519 0%, #2a0b0e 48%, #140506 100%);
+    --panel: rgba(52, 18, 21, .82);
+    --line: rgba(230, 110, 110, .26);
+    --accent: #ff6b6b;
+    --accent-dim: rgba(255, 107, 107, .18);
+    --alert-bg: #c02b25;
+    --alert-fg: #fff0ee;
+    --alert-line: rgba(255, 160, 150, .55);
+  }
+
+  body[data-state="estop"] {
+    --bg: radial-gradient(1100px 680px at 72% 6%, #5a4408 0%, #2c2205 48%, #141003 100%);
+    --panel: rgba(52, 42, 12, .84);
+    --line: rgba(240, 200, 80, .3);
+    --accent: #ffd23f;
+    --accent-dim: rgba(255, 210, 63, .16);
+    --alert-bg: #f2c300;
+    --alert-fg: #2a2000;
+    --alert-line: rgba(255, 235, 140, .8);
+  }
+
+  body[data-state="offline"] {
+    --bg: radial-gradient(1100px 680px at 72% 6%, #1b2329 0%, #10161a 55%, #080c0f 100%);
+    --panel: rgba(26, 34, 40, .8);
+    --line: rgba(140, 160, 175, .2);
+    --accent: #8fa6b5;
+    --accent-dim: rgba(143, 166, 181, .14);
+    --alert-bg: #46525c;
+    --alert-fg: #eaf1f6;
+    --alert-line: rgba(180, 200, 215, .4);
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif;
+    color: var(--txt);
+    background: var(--bg);
+    background-attachment: fixed;
+    overflow: hidden;
+    transition: background .35s ease;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(0, 0, 0, .28);
+    backdrop-filter: blur(8px);
+    height: 58px;
+  }
+
+  .brand {
+    font-weight: 800;
+    letter-spacing: .16em;
+    font-size: 14px;
+    color: var(--txt);
+    white-space: nowrap;
+  }
+  .brand span { color: var(--accent); }
+
+  .alert {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    padding: 8px 14px;
+    border-radius: 9px;
+    background: var(--alert-bg);
+    color: var(--alert-fg);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    border: 1px solid var(--alert-line);
+    transition: background .25s ease, color .25s ease;
+  }
+  .alert .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor; opacity: .9;
+    flex: none;
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  body[data-state="offline"] .alert .dot { animation: none; opacity: .5; }
+  @keyframes pulse { 0%,100%{opacity:.35; transform:scale(.85);} 50%{opacity:1; transform:scale(1.15);} }
+
+  .alert .sub {
+    font-weight: 400;
+    opacity: .8;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hdr-actions { display: flex; gap: 8px; flex: none; }
+
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--txt);
+    background: rgba(255, 255, 255, .07);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 13px;
+    cursor: pointer;
+    transition: background .16s, transform .08s, border-color .16s;
+    white-space: nowrap;
+  }
+  button:hover:not(:disabled) { background: rgba(255, 255, 255, .13); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: .38; cursor: not-allowed; }
+
+  .btn-estop {
+    background: #c62828;
+    border-color: #ff8a80;
+    color: #fff;
+    min-width: 84px;
+  }
+  .btn-estop:hover:not(:disabled) { background: #d93a34; }
+  body[data-state="estop"] .btn-estop {
+    background: #f2c300; border-color: #fff0a0; color: #2a2000;
+  }
+  body[data-state="estop"] .btn-estop:hover { background: #ffd83d; }
+
+  .ghost { background: transparent; }
+
+  main { display: flex; height: calc(100vh - 58px); }
+
+  #console {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px 16px 44px;
+  }
+  #console::-webkit-scrollbar { width: 9px; }
+  #console::-webkit-scrollbar-thumb { background: rgba(255,255,255,.13); border-radius: 5px; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 11px;
+    backdrop-filter: blur(4px);
+  }
+  .card h3 {
+    margin: 0 0 10px;
+    font-size: 11px;
+    letter-spacing: .16em;
+    color: var(--dim);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .status { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 9px; }
+  .status .item {
+    background: var(--panel2);
+    border-radius: 8px;
+    padding: 7px 9px;
+    min-width: 0;
+  }
+  .status .k { font-size: 10px; color: var(--dim); letter-spacing: .1em; }
+  .status .v { font-size: 13px; font-weight: 700; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status .v.bad { color: #ff9b8f; }
+  .status .v.warn { color: #ffd23f; }
+
+  .axis { display: flex; align-items: center; gap: 9px; margin: 5px 0; }
+  .axis .an { width: 26px; font-size: 11px; font-weight: 800; color: var(--dim); flex: none; }
+  .axis .bar { flex: 1; height: 8px; background: rgba(255,255,255,.07); border-radius: 5px; overflow: hidden; }
+  .axis .bar i { display: block; height: 100%; width: 50%; border-radius: 5px; transition: width .09s linear; }
+  .axis .av { width: 34px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--txt); flex: none; }
+  .axis[data-k="L"] .bar i { background: linear-gradient(90deg, #2bb35f, #4be08c); }
+  .axis[data-k="R"] .bar i { background: linear-gradient(90deg, #6b6bff, #a58bff); }
+  .axis[data-k="V"] .bar i { background: linear-gradient(90deg, #d98324, #ffc247); }
+
+  .presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 7px; }
+  .preset {
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--panel2);
+    border: 1px solid transparent;
+    font-weight: 700;
+  }
+  .preset:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-dim); }
+  .preset.on { border-color: var(--accent); background: var(--accent-dim); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .preset small { display: block; font-weight: 400; color: var(--dim); font-size: 10px; margin-top: 2px; }
+
+  .sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 4px 18px; }
+  .sl { display: flex; align-items: center; gap: 8px; }
+  .sl label { width: 26px; font-size: 11px; font-weight: 800; color: var(--dim); }
+  .sl input[type=range] {
+    flex: 1; height: 4px; -webkit-appearance: none; appearance: none;
+    background: rgba(255,255,255,.13); border-radius: 3px; outline: none;
+  }
+  .sl input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: 2px solid #0b1411;
+  }
+  .sl .sv { width: 30px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
+
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 9px; }
+  .row label { font-size: 11px; color: var(--dim); }
+  input[type=number] {
+    width: 74px; padding: 6px 8px; border-radius: 7px;
+    background: rgba(0,0,0,.3); color: var(--txt);
+    border: 1px solid var(--line); font-family: inherit; font-size: 12px;
+  }
+
+  .log {
+    height: 104px; overflow-y: auto;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 11px; line-height: 1.55;
+    color: var(--dim);
+    background: rgba(0,0,0,.28);
+    border-radius: 8px; padding: 7px 9px;
+  }
+  .log div { white-space: pre-wrap; word-break: break-all; }
+  .log .ok { color: #6ee7a8; }
+  .log .bad { color: #ff9b8f; }
+  .log .cmd { color: #9ecbff; }
+
+  #sim {
+    width: 50%;
+    flex: none;
+    min-width: 0;
+    position: relative;
+    border-left: 1px solid var(--line);
+    background: rgba(0, 0, 0, .2);
+    transition: width .3s cubic-bezier(.4,0,.2,1);
+    overflow: hidden;
+  }
+  body.collapsed #sim { width: 58px; }
+
+  #view { display: block; width: 100%; height: 100%; }
+
+  .sim-badge {
+    position: absolute; top: 12px; left: 14px;
+    font-size: 10px; font-weight: 800; letter-spacing: .22em;
+    color: var(--accent);
+    padding: 5px 9px; border-radius: 6px;
+    background: rgba(0,0,0,.4);
+    border: 1px solid var(--line);
+    transition: opacity .2s;
+  }
+  .sim-badge::before { content: "● "; }
+
+  .frozen-note {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    font-size: 13px; font-weight: 800; letter-spacing: .1em;
+    color: #ffd0c8;
+    padding: 14px 20px;
+    border-radius: 10px;
+    background: rgba(60, 12, 12, .82);
+    border: 1px solid rgba(255, 120, 110, .5);
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s;
+    line-height: 1.7;
+  }
+  .frozen-note small { display: block; font-weight: 400; font-size: 11px; opacity: .75; letter-spacing: 0; }
+
+  body[data-state="real"] .frozen-note { opacity: 1; }
+  body[data-state="real"] #view { filter: grayscale(.85) brightness(.55); }
+  body[data-state="real"] .sim-badge { color: #ff9b8f; }
+
+  .cam-hint {
+    position: absolute; top: 12px; left: 12px;
+    font-size: 10px; letter-spacing: .04em;
+    color: var(--dim);
+    padding: 5px 9px; border-radius: 6px;
+    background: rgba(0,0,0,.35);
+    border: 1px solid var(--line);
+    opacity: .8; pointer-events: none;
+    transition: opacity .3s;
+  }
+
+  #view { cursor: grab; touch-action: none; }
+  #view.dragging { cursor: grabbing; }
+
+  #emu3d { position: absolute; inset: 0; visibility: hidden; opacity: 0; }
+  #emu3d canvas { display: block; cursor: grab; }
+  #emu3d canvas:active { cursor: grabbing; }
+  body.emu3d #emu3d { visibility: visible; opacity: 1; }
+  body.emu3d #view { display: none; }
+  body[data-state="real"] #emu3d { filter: grayscale(.85) brightness(.55); }
+
+  .hud {
+    position: absolute; left: 12px; right: 12px; bottom: 12px;
+    display: flex; flex-wrap: wrap; gap: 5px;
+  }
+  .chip {
+    font-size: 10px; font-weight: 700;
+    padding: 4px 7px; border-radius: 6px;
+    background: rgba(0,0,0,.42);
+    border: 1px solid var(--line);
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .chip b { color: var(--txt); font-weight: 800; }
+  
+  .chip.bad { border-color: rgba(255, 120, 100, .6); color: #ff9b8f; }
+  .chip.bad b { color: #ffb3a8; }
+
+  .takeover {
+    display: none;
+    align-items: center; gap: 9px; flex-wrap: wrap;
+    margin-top: 9px; padding: 7px 10px;
+    border-radius: 8px;
+    background: rgba(255, 210, 63, .12);
+    border: 1px solid rgba(255, 210, 63, .45);
+    color: #ffe08a; font-size: 11px; font-weight: 700;
+  }
+  body.takeover .takeover { display: flex; }
+  .takeover button { padding: 3px 9px; font-size: 10px; }
+
+  .card h3.with-actions { display: flex; align-items: center; gap: 7px; }
+  .card h3.with-actions .sp { flex: 1; }
+  .card h3.with-actions button {
+    text-transform: none; letter-spacing: 0;
+    font-size: 10px; padding: 3px 8px; font-weight: 700;
+  }
+
+  .modal {
+    position: fixed; inset: 0; z-index: 90;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, .62);
+    backdrop-filter: blur(3px);
+  }
+  .modal[hidden] { display: none; }
+  .modal .box {
+    width: min(440px, 92vw);
+    background: #16241f;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
+  }
+  .modal h4 { margin: 0 0 6px; font-size: 15px; }
+  .modal p { margin: 0 0 12px; font-size: 12px; color: var(--dim); line-height: 1.55; }
+  .port-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; max-height: 210px; overflow: auto; }
+  .port-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 11px; border-radius: 8px; width: 100%;
+    background: var(--panel2); border: 1px solid transparent;
+    text-align: left;
+  }
+  .port-item:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-dim); }
+  .port-item .dev { font-weight: 800; font-size: 13px; flex: none; }
+  .port-item .desc { font-size: 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .port-item .tag { margin-left: auto; flex: none; font-size: 9px; padding: 2px 6px; border-radius: 5px; background: var(--accent-dim); color: var(--accent); }
+  .modal .row { display: flex; gap: 8px; align-items: center; margin: 0; }
+  .modal input[type="text"] {
+    flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px;
+    background: rgba(0, 0, 0, .35); border: 1px solid var(--line);
+    color: var(--txt); font-size: 13px; font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .strip {
+    display: none;
+    position: absolute; inset: 0;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+  }
+  .strip span {
+    writing-mode: vertical-rl;
+    font-size: 11px; letter-spacing: .22em; color: var(--dim); font-weight: 700;
+  }
+  .strip button { padding: 6px 8px; }
+
+  body.collapsed .strip { display: flex; }
+  body.collapsed #view,
+  body.collapsed #emu3d,
+  body.collapsed .hud,
+  body.collapsed .sim-badge,
+  body.collapsed .cam-hint,
+  body.collapsed .frozen-note { opacity: 0; pointer-events: none; }
+
+  body.collapsed .hud { display: none; }
+</style>
+</head>
+<body data-state="offline">
+
+<header>
+  <div class="brand">OSR<span>·</span>CONTROL</div>
+  <div class="alert">
+    <span class="dot"></span>
+    <span id="alertText">正在连接…</span>
+    <span class="sub" id="alertSub"></span>
+  </div>
+  <div class="hdr-actions">
+    <button id="btnMode">切到真机</button>
+    <button id="btnEstop" class="btn-estop">急停</button>
+    <button id="btnDrawer" class="ghost" title="收起 / 展开模拟视图">⟩</button>
+  </div>
+</header>
+
+<main>
+  <section id="console">
+
+    <div class="card">
+      <h3>状态</h3>
+      <div class="status">
+        <div class="item"><div class="k">设备</div><div class="v" id="stDevice">—</div></div>
+        <div class="item"><div class="k">连接</div><div class="v" id="stLink">—</div></div>
+        <div class="item"><div class="k">模式</div><div class="v" id="stMode">—</div></div>
+        <div class="item"><div class="k">运行</div><div class="v" id="stRun">—</div></div>
+        <div class="item"><div class="k">预设</div><div class="v" id="stPreset">—</div></div>
+        <div class="item"><div class="k">强度</div><div class="v" id="stInt">—</div></div>
+        <div class="item"><div class="k">速度</div><div class="v" id="stSpd">—</div></div>
+      </div>
+      <div class="row">
+        <button id="btnStart" class="ghost" hidden>启动控制服务</button>
+        <button id="btnStop" class="ghost">停止动作</button>
+        <button id="btnHome" class="ghost">回中位</button>
+        <button id="btnQuit" class="ghost">退出服务</button>
+      </div>
+      <div class="takeover" id="takeoverBar">
+        <span id="takeoverText">agent 正在接管控制</span>
+        <button class="ghost" id="btnRelease">收回控制</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>当前输出（六轴 + 振动）</h3>
+      <div id="axes"></div>
+    </div>
+
+    <div class="card">
+      <h3>预设</h3>
+      <div class="presets" id="presets"></div>
+      <div class="row">
+        <label>强度</label>
+        <input type="range" id="intensity" min="10" max="200" value="100" style="width:150px">
+        <span id="intensityVal" style="font-size:12px;width:38px">1.00</span>
+        <button id="btnIntensity" class="ghost">应用强度</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>手动控制</h3>
+      <div class="sliders" id="sliders"></div>
+      <div class="row">
+        <label>过渡</label>
+        <input type="number" id="ms" value="300" min="0" max="5000" step="50">
+        <label>ms</label>
+        <button id="btnSend">发送</button>
+        <button id="btnCenter" class="ghost">六轴回中</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>快捷动作</h3>
+      <div class="row" style="margin-top:0">
+        <button class="ghost" data-act="stroke">往返</button>
+        <button class="ghost" data-act="twitch">抽动</button>
+        <button class="ghost" data-act="circle">画圈</button>
+        <button class="ghost" data-act="wave">波浪</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="with-actions">日志
+        <span class="sp"></span>
+        <button class="ghost" id="btnLogOpen" title="用系统默认程序打开 daemon.log">打开</button>
+        <button class="ghost" id="btnLogClear" title="清空日志文件（不影响正在运行的动作）">清空</button>
+      </h3>
+      <div class="log" id="log"></div>
+    </div>
+
+  </section>
+
+  <aside id="sim">
+    <div id="emu3d"></div>
+    <canvas id="view"></canvas>
+    <div class="sim-badge" id="simBadge">SIMULATION</div>
+    <div class="cam-hint" id="camHint">拖动旋转 · 滚轮缩放 · 双击复位</div>
+    <div class="frozen-note">真机模式 · 模拟视图已冻结<small>动作正在真实设备上执行</small></div>
+    <div class="hud" id="hud"></div>
+    <div class="strip" id="strip">
+      <button class="ghost" id="btnExpand">⟨</button>
+      <span>模拟视图</span>
+    </div>
+  </aside>
+</main>
+
+<div class="modal" id="portModal" hidden>
+  <div class="box">
+    <h4>手动选择串口</h4>
+    <p id="portHint">自动探测没找到设备。从下面挑一个，或直接输入端口名。</p>
+    <div class="port-list" id="portList"></div>
+    <div class="row">
+      <input type="text" id="portInput" placeholder="COM5" autocomplete="off" spellcheck="false">
+      <button id="btnPortOk">连接</button>
+      <button class="ghost" id="btnPortCancel">取消</button>
+    </div>
+    <p style="margin:12px 0 0;font-size:10px">
+      留空点「连接」= 回到自动探测。端口名在「设备管理器 → 端口(COM 和 LPT)」里看，
+      插上 USB 后新出现的那个多半是 CH340 / CP210x。
+    </p>
+  </div>
+</div>
+
+<script src="vendor/osr-emu.dist.min.js"></script>
+<script>
+"use strict";
+
+const AXES = ["L0", "L1", "L2", "R0", "R1", "R2"];
+const AXES_ALL = AXES.concat(["V0"]);
+
+const PRESETS = {
+  sway:    ["左右摇摆", "L2 横扫 + L0 慢冲"],
+  orbit:   ["环游画圆", "三轴椭圆轨迹"],
+  roll:    ["翻滚", "R1 大滚转"],
+  pitch:   ["俯仰推拉", "R2 俯仰 + L1 推拉"],
+  figure8: ["八字回环", "L1/L2 走 8 字"],
+  storm:   ["六轴乱流", "随机乱跳"],
+  tide:    ["潮汐", "极慢漂移"],
+  coil:    ["缠绕", "R0/R1 拧转"],
+  pulse:   ["脉冲", "抽一下停一下"],
+  weave:   ["编织", "2:3 李萨如"]
+};
+
+const S = {
+  daemon_up: false, real: false, estop: false, mode: "offline",
+  preset: null, out: null, axes: null, intensity: 1, speed: 1,
+  last_error: "", device: null,
+  link: null,   
+  owner: "",    
+  owner_left_s: 0
+};
+
+const $ = (s) => document.querySelector(s);
+
+function log(msg, kind) {
+  const box = $("#log");
+  const d = document.createElement("div");
+  if (kind) d.className = kind;
+  const t = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  d.textContent = `[${t}] ${msg}`;
+  box.appendChild(d);
+  while (box.children.length > 90) box.removeChild(box.firstChild);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function post(path, body) {
+  try {
+    const r = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    });
+    return await r.json();
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+async function cmd(obj, label) {
+  const r = await post("/api/cmd", obj);
+  if (r.ok) log(`${label || JSON.stringify(obj)}  ✓`, "ok");
+  else log(`${label || JSON.stringify(obj)}  ✗ ${r.error || ""}`, "bad");
+  pollOnce();
+  return r;
+}
+
+let polling = false;
+
+async function pollOnce() {
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    Object.assign(S, await r.json());
+  } catch (e) {
+    S.daemon_up = false;
+    S.mode = "offline";
+    S.last_error = "WebUI 服务断了";
+  }
+  render();
+}
+
+async function pollLoop() {
+  if (polling) return;
+  polling = true;
+  while (true) {
+    await pollOnce();
+    await new Promise((res) => setTimeout(res, 130));
+  }
+}
+
+async function watchLink(toReal, ms = 10000, allowModal = true) {
+  const t0 = Date.now();
+  let saidPorts = null, saidErr = null;
+  while (Date.now() - t0 < ms) {
+    await pollOnce();
+    const L = S.link || {};
+    const okNow = toReal
+      ? (L.connected && L.transport !== "emu")
+      : (L.transport === "emu" && L.connected);
+    if (okNow) {
+      log(toReal ? `✓ 已连上：${L.hint}` : "✓ 已切回模拟器", "ok");
+      return true;
+    }
+    if (toReal) {
+      const ports = L.ports || [];
+      const sig = ports.map((p) => p.device).join(",") + "|" + L.serial_ready;
+      if (sig !== saidPorts) {
+        saidPorts = sig;
+        if (L.serial_ready === false) {
+          log("没装 pyserial，串口连不了：pip install pyserial（或跑 install.ps1）", "bad");
+        } else if (ports.length) {
+          log("系统串口：" + ports.map((p) =>
+            p.device + (p.likely ? "（像目标设备）" : "")).join(" / "), "cmd");
+        } else {
+          log("系统里没看到任何串口 —— 查 USB 线 / 驱动", "bad");
+        }
+      }
+      const err = (S.last_error || "").split("\n")[0];
+      if (err && err !== saidErr) {
+        saidErr = err;
+        log("连接失败：" + err, "bad");
+      }
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  const L = S.link || {};
+  log(toReal
+    ? `${ms / 1000} 秒内没连上真机（${L.transport_name || "USB 串口"} · 未连接）`
+    : "切回模拟器超时", "bad");
+      if (toReal && allowModal) openPortModal();
+  return false;
+}
+
+async function openPortModal(reason) {
+  const box = $("#portModal");
+  if (!box.hidden) return;                 
+  const list = $("#portList");
+  $("#portHint").textContent = reason
+    || "自动探测没找到设备。从下面挑一个，或直接输入端口名。";
+  list.innerHTML = `<div style="font-size:11px;color:var(--dim)">正在读取系统串口…</div>`;
+  box.hidden = false;
+
+  let r = { ok: false, ports: [] };
+  try {
+    r = await (await fetch("/api/ports", { cache: "no-store" })).json();
+  } catch (e) {  }
+
+  const ports = r.ports || [];
+  list.innerHTML = "";
+  if (!ports.length) {
+    const why = r.serial_ready === false
+      ? "没装 pyserial —— 串口这条路走不通，先 pip install pyserial"
+      : "系统里没看到任何串口（查 USB 线 / 驱动）";
+    list.innerHTML = `<div style="font-size:11px;color:#ff9b8f;line-height:1.6">${why}</div>`;
+  }
+  for (const p of ports) {
+    const b = document.createElement("button");
+    b.className = "port-item";
+    b.innerHTML = `<span class="dev">${p.device}</span>
+      <span class="desc">${p.desc || ""}</span>
+      ${p.likely ? '<span class="tag">像目标设备</span>' : ""}`;
+    b.onclick = () => { $("#portInput").value = p.device; connectPort(p.device); };
+    list.appendChild(b);
+  }
+  if (ports.length === 1) $("#portInput").value = ports[0].device;
+  $("#portInput").focus();
+}
+
+async function connectPort(port) {
+  const r = await post("/api/port", { port: port || null });
+  if (!r.ok) {
+    log(`指定串口失败：${r.error || ""}`, "bad");
+    return;
+  }
+  $("#portModal").hidden = true;
+  log(port ? `已指定串口 ${port}，正在连接…` : "已回到自动探测", "cmd");
+  await watchLink(true, 12000, false);
+}
+
+const MODE_TEXT = {
+  idle: "待机", axes: "手动", fade: "过渡中", seq: "片段", preset: "预设",
+  offline: "离线"
+};
+
+function stateName() {
+  if (S.estop) return "estop";
+  if (!S.daemon_up) return "offline";
+  return S.real ? "real" : "emu";
+}
+
+const ALERTS = {
+  emu:     ["模拟模式", "只在屏幕里动，不会驱动真实设备"],
+  real:    ["真机模式", "动作会直接作用到真实设备，注意安全"],
+  estop:   ["急停已锁定", "所有控制被拒绝，按右侧「急停」按钮解除"],
+  offline: ["控制服务未连接", "点「启动控制服务」拉起"]
+};
+
+function fmtDur(s) {
+  s = Math.max(0, Math.round(s || 0));
+  if (s < 60) return s + "s";
+  if (s < 3600) return Math.floor(s / 60) + "m" + String(s % 60).padStart(2, "0") + "s";
+  return Math.floor(s / 3600) + "h" + String(Math.floor((s % 3600) / 60)).padStart(2, "0") + "m";
+}
+
+function linkView() {
+  const L = S.link || {};
+  const v = { text: "—", cls: "", full: "", chip: "—", chipBad: false };
+  if (!S.daemon_up) {
+    v.text = "离线"; v.cls = " bad"; v.chip = "—";
+    return v;
+  }
+  if (!L.transport) {
+    v.text = "未连接"; v.cls = " warn"; v.chip = "未连接"; v.chipBad = true;
+    v.full = "控制服务起来了，但还没连设备";
+    return v;
+  }
+  if (L.transport === "emu") {
+    v.text = "本地模拟"; v.chip = "模拟";
+    v.full = "osr-emu 模拟器，不驱动真实硬件";
+    return v;
+  }
+  if (L.connected) {
+    v.text = L.hint;
+    v.full = L.hint + (L.uptime_s ? ` · 已连 ${fmtDur(L.uptime_s)}` : "");
+    v.chip = L.endpoint || L.transport_name;
+    return v;
+  }
+  v.text = (L.transport_name || "设备") + " · 未连接";
+  v.cls = " bad";
+  v.chip = "未连接";
+  v.chipBad = true;
+  v.full = L.error || "正在重试连接";
+  if (L.transport === "serial" && L.serial_ready === false) {
+    v.text = "USB 串口 · 缺 pyserial";
+    v.full = "没装 pyserial，串口这条路走不通：pip install pyserial"
+      + "（或双击 install.ps1）";
+  } else if (L.ports && L.ports.length) {
+    v.full += " · 串口：" + L.ports.map((p) => p.device).join(" ");
+  }
+  return v;
+}
+
+function render() {
+  const st = stateName();
+  if (document.body.dataset.state !== st) document.body.dataset.state = st;
+  paintEmu3D(st);
+  const c3 = $("#chip3d");
+  if (c3) {
+    c3.innerHTML = EMU3D.ok
+      ? `3D <b>SR6</b> · ${EMU3D.feeds}`
+      : `3D <b>简版</b>`;
+  }
+
+  const LV = linkView();
+  const cL = $("#chipLink");
+  if (cL) {
+    cL.className = "chip" + (LV.chipBad ? " bad" : "");
+    cL.innerHTML = `链路 <b>${LV.chip}</b>`;
+    cL.title = LV.full;
+  }
+
+  const [title, sub] = ALERTS[st];
+  $("#alertText").textContent = title;
+  let extra = sub;
+  if (st === "offline" && S.last_error) extra = S.last_error.split("\n")[0];
+  if (st === "real") {
+    if (S.last_error) {
+      extra = "设备未就绪：" + S.last_error.split("\n")[0];
+    } else if (LV.text && S.link && S.link.connected) {
+      extra = `${S.link.hint} · 已连接 —— 动作会直接作用到真实设备`;
+    } else {
+      extra = `${(S.link && S.link.transport_name) || "设备"} · 正在连接…`;
+    }
+  }
+  $("#alertSub").textContent = extra;
+
+    const locked = !S.daemon_up || S.estop || S.owner === "agent";
+  const bm = $("#btnMode");
+  bm.disabled = !S.daemon_up;
+  bm.textContent = S.real ? "切到模拟" : "切到真机";
+
+    const takingOver = S.daemon_up && S.owner === "agent";
+  document.body.classList.toggle("takeover", takingOver);
+  if (takingOver) {
+    $("#takeoverText").textContent =
+      `agent 正在接管控制（${S.owner_left_s || 0} 秒无指令自动交还）`;
+  }
+
+  const be = $("#btnEstop");
+  be.textContent = S.estop ? "解除急停" : "急停";
+
+    $("#stDevice").textContent = S.device || "—";
+  const lkEl = $("#stLink");
+  lkEl.textContent = LV.text;
+  lkEl.className = "v" + LV.cls;
+  lkEl.title = LV.full || LV.text;
+  const modeEl = $("#stMode");
+  modeEl.textContent = !S.daemon_up ? "离线" : (S.real ? "真机" : "模拟");
+  modeEl.className = "v" + (!S.daemon_up ? " bad" : (S.real ? " bad" : ""));
+  $("#stRun").textContent = MODE_TEXT[S.mode] || S.mode || "—";
+  $("#stPreset").textContent = S.preset || "—";
+  $("#stInt").textContent = (S.intensity || 1).toFixed(2);
+  $("#stSpd").textContent = (S.speed || 1).toFixed(2);
+
+  $("#btnStart").hidden = S.daemon_up;
+  for (const id of ["#btnStop", "#btnHome", "#btnQuit", "#btnSend", "#btnCenter", "#btnIntensity"]) {
+    $(id).disabled = !S.daemon_up;
+  }
+  document.querySelectorAll(".preset").forEach((b) => {
+    b.disabled = locked;
+    b.classList.toggle("on", S.preset === b.dataset.preset);
+  });
+  document.querySelectorAll(".slider").forEach((s) => { s.disabled = locked; });
+  document.querySelectorAll("[data-act]").forEach((b) => { b.disabled = locked; });
+
+    if (S.out) {
+    for (const a of AXES_ALL) {
+      const v = S.out[a];
+      if (v == null) continue;
+      const row = document.querySelector(`.axis[data-axis="${a}"]`);
+      if (!row) continue;
+      row.querySelector("i").style.width = Math.max(1.5, Math.min(100, v)) + "%";
+      row.querySelector(".av").textContent = Math.round(v);
+      const chip = document.querySelector(`.chip[data-axis="${a}"]`);
+      if (chip) chip.innerHTML = `${a} <b>${Math.round(v)}</b>`;
+    }
+  }
+
+    if (!S.real && S.out) {
+    for (const a of AXES_ALL) {
+      if (S.out[a] != null) T[a] = S.out[a];
+    }
+  }
+}
+
+function buildAxisRows() {
+  const box = $("#axes");
+  box.innerHTML = "";
+  for (const a of AXES_ALL) {
+    const kind = a[0];
+    const row = document.createElement("div");
+    row.className = "axis";
+    row.dataset.axis = a;
+    row.dataset.k = kind;
+    row.innerHTML = `<span class="an">${a}</span>
+      <div class="bar"><i style="width:50%"></i></div>
+      <span class="av">50</span>`;
+    box.appendChild(row);
+  }
+  const hud = $("#hud");
+  hud.innerHTML = "";
+  for (const a of AXES_ALL) {
+    const c = document.createElement("span");
+    c.className = "chip";
+    c.dataset.axis = a;
+    c.innerHTML = `${a} <b>50</b>`;
+    hud.appendChild(c);
+  }
+  const st3d = document.createElement("span");
+  st3d.className = "chip";
+  st3d.id = "chip3d";
+  st3d.innerHTML = "3D <b>—</b>";
+  hud.appendChild(st3d);
+
+  const stLk = document.createElement("span");
+  stLk.className = "chip";
+  stLk.id = "chipLink";
+  stLk.innerHTML = "链路 <b>—</b>";
+  hud.appendChild(stLk);
+}
+
+function buildPresets() {
+  const box = $("#presets");
+  box.innerHTML = "";
+  for (const [name, info] of Object.entries(PRESETS)) {
+    const b = document.createElement("button");
+    b.className = "preset";
+    b.dataset.preset = name;
+    b.innerHTML = `${name}<small>${info[0]} · ${info[1]}</small>`;
+    b.onclick = () => cmd({ preset: name }, `预设 ${name}`);
+    box.appendChild(b);
+  }
+}
+
+function buildSliders() {
+  const box = $("#sliders");
+  box.innerHTML = "";
+  for (const a of AXES) {
+    const wrap = document.createElement("div");
+    wrap.className = "sl";
+    wrap.innerHTML = `<label>${a}</label>
+      <input class="slider" type="range" min="0" max="100" value="50" data-axis="${a}">
+      <span class="sv">50</span>`;
+    const inp = wrap.querySelector("input");
+    const sv = wrap.querySelector(".sv");
+    let timer = null;
+    inp.addEventListener("input", () => {
+      sv.textContent = inp.value;
+      clearTimeout(timer);
+      timer = setTimeout(sendAxes, 120);
+    });
+    box.appendChild(wrap);
+  }
+}
+
+let sendTimer = null;
+function sendAxes() {
+  const axes = {};
+  document.querySelectorAll(".slider").forEach((s) => { axes[s.dataset.axis] = +s.value; });
+  const ms = Math.max(0, Math.min(5000, +$("#ms").value || 0));
+  return cmd({ axes, ms }, `手动 ${JSON.stringify(axes)}${ms ? " / " + ms + "ms" : ""}`);
+}
+
+function makeSeq(kind) {
+  if (kind === "stroke") {
+    return [[0, { L0: 20 }], [700, { L0: 85 }], [1400, { L0: 20 }]];
+  }
+  if (kind === "twitch") {
+    return [[0, { L0: 35 }], [140, { L0: 82 }], [300, { L0: 35 }],
+            [460, { L0: 82 }], [620, { L0: 35 }]];
+  }
+  if (kind === "circle") {
+    const k = [];
+    for (let i = 0; i <= 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      k.push([i * 300, {
+        L1: 50 + Math.cos(a) * 30,
+        L2: 50 + Math.sin(a) * 30,
+        L0: 50 + Math.sin(a * 2) * 12
+      }]);
+    }
+    return k;
+  }
+    const k = [];
+  for (let i = 0; i <= 10; i++) {
+    const p = i / 10;
+    k.push([i * 220, {
+      L0: 50 + Math.sin(p * Math.PI * 2) * 32,
+      L1: 50 + Math.sin(p * Math.PI * 2 + 1.2) * 18,
+      L2: 50 + Math.sin(p * Math.PI * 2 + 2.4) * 18,
+      R1: 50 + Math.sin(p * Math.PI * 2) * 22
+    }]);
+  }
+  return k;
+}
+
+const T = { L0: 50, L1: 50, L2: 50, R0: 50, R1: 50, R2: 50, V0: 0 };  
+const C = { L0: 50, L1: 50, L2: 50, R0: 50, R1: 50, R2: 50, V0: 0 };  
+
+const cv = $("#view");
+const ctx = cv.getContext("2d");
+let VW = 0, VH = 0, DPR = 1;
+
+function resizeCanvas() {
+  const r = cv.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return;
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.round(r.width * DPR);
+  cv.height = Math.round(r.height * DPR);
+  VW = r.width;
+  VH = r.height;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener("resize", resizeCanvas);
+if (window.ResizeObserver) new ResizeObserver(resizeCanvas).observe($("#sim"));
+
+const ISO = Math.PI / 6;
+
+const CAM = { yaw: 0, pitch: 0, zoom: 1, drag: false, lx: 0, ly: 0 };
+const CAM_DEF = { yaw: 0, pitch: 0, zoom: 1 };
+const PITCH_MAX = 1.15;                  
+const ZOOM_MIN = 0.45, ZOOM_MAX = 2.8;
+
+function camP(p) {
+  const cy = Math.cos(CAM.yaw), sy = Math.sin(CAM.yaw);
+  const x = p.x * cy + p.z * sy;
+  const z0 = -p.x * sy + p.z * cy;
+  const cp = Math.cos(CAM.pitch), sp = Math.sin(CAM.pitch);
+  return { x: x, y: p.y * cp - z0 * sp, z: p.y * sp + z0 * cp };
+}
+
+function projCam(q, o) {
+  const x = (q.x - q.z) * Math.cos(ISO);
+  const y = (q.x + q.z) * Math.sin(ISO) - q.y;
+  return [o.cx + x * o.s * CAM.zoom, o.cy + y * o.s * CAM.zoom];
+}
+
+function proj(p, o) {
+  return projCam(camP(p), o);
+}
+
+function rotP(p, r) {
+  const cy = Math.cos(r.yaw), sy = Math.sin(r.yaw);
+  let x = p.x * cy + p.z * sy;
+  let z = -p.x * sy + p.z * cy;
+  const cp = Math.cos(r.pitch), sp = Math.sin(r.pitch);
+  let y = p.y * cp - z * sp;
+  z = p.y * sp + z * cp;
+  const cr = Math.cos(r.roll), sr = Math.sin(r.roll);
+  const x2 = x * cr - y * sr;
+  const y2 = x * sr + y * cr;
+  return { x: x2, y: y2, z: z };
+}
+
+const LIGHT = (() => {
+  const v = { x: -0.42, y: 0.82, z: 0.39 };
+  const n = Math.hypot(v.x, v.y, v.z);
+  return { x: v.x / n, y: v.y / n, z: v.z / n };
+})();
+
+const FACES = [
+  { idx: [0, 1, 3, 2], n: { x: -1, y: 0, z: 0 } },
+  { idx: [4, 6, 7, 5], n: { x: 1, y: 0, z: 0 } },
+  { idx: [0, 4, 5, 1], n: { x: 0, y: -1, z: 0 } },
+  { idx: [2, 3, 7, 6], n: { x: 0, y: 1, z: 0 } },
+  { idx: [0, 2, 6, 4], n: { x: 0, y: 0, z: -1 } },
+  { idx: [1, 5, 7, 3], n: { x: 0, y: 0, z: 1 } }
+];
+
+function drawBox(o, center, half, rot, rgb, alpha) {
+  const corners = [];
+  for (const sx of [-1, 1]) {
+    for (const sy of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        const local = { x: sx * half.x, y: sy * half.y, z: sz * half.z };
+        const rp = rotP(local, rot);
+                        corners.push(camP({
+          x: rp.x + center.x, y: rp.y + center.y, z: rp.z + center.z
+        }));
+      }
+    }
+  }
+
+  const list = FACES.map((f) => {
+    const pts = f.idx.map((i) => corners[i]);
+    const depth = pts.reduce((a, p) => a + (p.x + p.y + p.z), 0) / 4;
+    const rn = rotP(f.n, rot);
+    const lam = Math.max(0, rn.x * LIGHT.x + rn.y * LIGHT.y + rn.z * LIGHT.z);
+    const shade = 0.34 + 0.66 * lam;
+    return { pts, depth, shade };
+  }).sort((a, b) => a.depth - b.depth);
+
+  for (const f of list) {
+    ctx.beginPath();
+    f.pts.forEach((p, i) => {
+      const q = projCam(p, o);
+      if (i === 0) ctx.moveTo(q[0], q[1]);
+      else ctx.lineTo(q[0], q[1]);
+    });
+    ctx.closePath();
+    const c = Math.round(255 * f.shade);
+    ctx.fillStyle = `rgba(${Math.round(rgb[0] * f.shade)},${Math.round(rgb[1] * f.shade)},${Math.round(rgb[2] * f.shade)},${alpha})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${Math.round(rgb[0] * 0.35)},${Math.round(rgb[1] * 0.35)},${Math.round(rgb[2] * 0.35)},.85)`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
+function drawGrid(o) {
+  ctx.strokeStyle = "rgba(255,255,255,.055)";
+  ctx.lineWidth = 1;
+  const R = 120, step = 30;
+  for (let v = -R; v <= R; v += step) {
+    let a = proj({ x: v, y: 0, z: -R }, o);
+    let b = proj({ x: v, y: 0, z: R }, o);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    a = proj({ x: -R, y: 0, z: v }, o);
+    b = proj({ x: R, y: 0, z: v }, o);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+  }
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+
+    if (EMU3D.ok) { feedEmu3D(); return; }
+
+  if (!VW || !VH) { resizeCanvas(); return; }
+  if (document.body.classList.contains("collapsed")) return;
+
+    for (const k of AXES_ALL) {
+    C[k] += (T[k] - C[k]) * 0.22;
+  }
+
+  const s = Math.min(VW / 520, VH / 470);
+  const o = { cx: VW / 2, cy: VH * 0.70, s: s };
+
+  ctx.clearRect(0, 0, VW, VH);
+
+    const g = ctx.createRadialGradient(VW / 2, VH * 0.55, 10, VW / 2, VH * 0.55, Math.max(VW, VH) * 0.7);
+  g.addColorStop(0, "rgba(255,255,255,.045)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, VW, VH);
+
+  drawGrid(o);
+
+  const vib = C.V0 / 100;
+  const jx = (Math.random() - 0.5) * vib * 7;
+  const jz = (Math.random() - 0.5) * vib * 7;
+
+  const colH = 26 + (C.L0 / 100) * 150;
+
+    drawBox(o, { x: 0, y: 7, z: 0 }, { x: 78, y: 7, z: 78 },
+          { yaw: 0, pitch: 0, roll: 0 }, [96, 128, 118], 0.95);
+
+    drawBox(o, { x: 0, y: 14 + colH / 2, z: 0 }, { x: 11, y: colH / 2, z: 11 },
+          { yaw: 0, pitch: 0, roll: 0 }, [110, 140, 130], 0.95);
+
+    const headX = ((C.L2 - 50) / 50) * 62 + jx;
+  const headZ = ((C.L1 - 50) / 50) * 62 + jz;
+  const headY = 14 + colH + 26;
+  const rot = {
+    yaw: ((C.R0 - 50) / 50) * Math.PI * 0.62,
+    pitch: ((C.R2 - 50) / 50) * Math.PI * 0.42,
+    roll: ((C.R1 - 50) / 50) * Math.PI * 0.42
+  };
+
+  drawBox(o, { x: headX, y: headY, z: headZ }, { x: 33, y: 21, z: 33 },
+          rot, [61, 220, 132], 0.95);
+
+    const tip = rotP({ x: 0, y: 30, z: 0 }, rot);
+  const p0 = proj({ x: headX, y: headY, z: headZ }, o);
+  const p1 = proj({ x: headX + tip.x, y: headY + tip.y, z: headZ + tip.z }, o);
+  ctx.strokeStyle = "rgba(160,255,205,.9)";
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+  ctx.beginPath(); ctx.arc(p1[0], p1[1], 3.2, 0, Math.PI * 2); ctx.fillStyle = "#b6ffd8"; ctx.fill();
+}
+
+function bind() {
+  $("#btnEstop").onclick = async () => {
+    const target = !S.estop;
+    const r = await post("/api/estop", { on: target });
+    if (r.ok) {
+      log(target ? "急停已按下 —— 已锁定" : "急停已解除", target ? "bad" : "ok");
+    } else {
+            log(`急停操作失败：${r.error || ""}`, "bad");
+      alert("急停没有生效！\n\n"
+        + (r.error || "未知原因") + "\n\n"
+        + "请立刻改用 estop.py 那个小窗口，或直接按键盘 F12。\n"
+        + "如果都不行，马上关掉设备上的物理开关。");
+    }
+    pollOnce();
+  };
+
+  $("#btnMode").onclick = async () => {
+    const toReal = !S.real;
+    if (toReal) {
+      const ok = confirm("切到真机后，动作会直接作用到真实设备。\n\n"
+        + "请确认：设备已开机、手机 App 已断开、周围安全。\n\n继续？");
+      if (!ok) return;
+    }
+    const r = await post("/api/mode", { real: toReal });
+    if (!r.ok) {
+      log(`切换失败：${r.error || ""}`, "bad");
+      pollOnce();
+      return;
+    }
+    if (!toReal) {
+      log("已切到模拟器", "ok");
+      await watchLink(false, 4000);
+      return;
+    }
+    log("切到真机：正在连接 USB 串口…", "cmd");
+    await watchLink(true, 10000);
+  };
+
+  $("#btnDrawer").onclick = () => toggleDrawer();
+  $("#btnExpand").onclick = () => toggleDrawer(false);
+  $("#strip").onclick = () => toggleDrawer(false);
+
+    $("#btnRelease").onclick = async () => {
+    if (!confirm("收回控制权？\n\nagent 之后的控制指令会被正常执行，"
+      + "直到它再次接管。急停按钮任何时候都有效。")) return;
+    const r = await post("/api/release", {});
+    log(r.ok ? "控制权已收回" : `收回失败：${r.error || ""}`, r.ok ? "ok" : "bad");
+    pollOnce();
+  };
+
+    $("#btnLogOpen").onclick = async () => {
+    const r = await post("/api/log", { action: "open", name: "daemon.log" });
+    log(r.ok ? `已用系统程序打开 ${r.path}` : `打开失败：${r.error}`, r.ok ? "ok" : "bad");
+  };
+  $("#btnLogClear").onclick = async () => {
+    if (!confirm("清空日志文件？（不影响正在运行的动作）")) return;
+    const r = await post("/api/log", { action: "clear" });
+    if (r.ok) {
+      const n = (r.cleared || []).length;
+      log(n ? `日志已清空（${r.cleared.join("、")}）` : "日志本来就是空的", "ok");
+    } else {
+      log(`清空失败：${r.error}`, "bad");
+    }
+  };
+
+    $("#btnPortOk").onclick = () => {
+    const v = ($("#portInput").value || "").trim().toUpperCase();
+    connectPort(v || null);
+  };
+  $("#portInput").onkeydown = (e) => {
+    if (e.key === "Enter") $("#btnPortOk").click();
+  };
+  $("#btnPortCancel").onclick = () => { $("#portModal").hidden = true; };
+
+  $("#btnStart").onclick = async () => {
+    log("正在启动控制服务…", "cmd");
+    const r = await post("/api/daemon", { action: "start" });
+    log(r.ok ? "控制服务已启动" : `启动失败：${r.error}`, r.ok ? "ok" : "bad");
+    pollOnce();
+  };
+
+  $("#btnStop").onclick = () => cmd({ stop: true }, "停止动作");
+  $("#btnHome").onclick = () => cmd({ home: true }, "回中位");
+  $("#btnQuit").onclick = async () => {
+    if (!confirm("退出控制服务？（会先归零）")) return;
+    await cmd({ quit: true }, "退出服务");
+  };
+
+  $("#btnSend").onclick = () => sendAxes();
+  $("#btnCenter").onclick = () => {
+    document.querySelectorAll(".slider").forEach((s) => {
+      s.value = 50;
+      s.parentElement.querySelector(".sv").textContent = "50";
+    });
+    cmd({ home: true }, "六轴回中");
+  };
+
+  $("#intensity").oninput = () => {
+    $("#intensityVal").textContent = ($("#intensity").value / 100).toFixed(2);
+  };
+  $("#btnIntensity").onclick = () => {
+    const v = $("#intensity").value / 100;
+    cmd({ intensity: v }, `强度 ${v.toFixed(2)}`);
+  };
+
+  document.querySelectorAll("[data-act]").forEach((b) => {
+    b.onclick = () => cmd({ seq: makeSeq(b.dataset.act) }, `动作 ${b.textContent}`);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+        if (!$("#portModal").hidden) { $("#portModal").hidden = true; return; }
+    if (!e.target.matches("input")) {
+      e.preventDefault();
+      $("#btnEstop").click();
+    }
+  });
+}
+
+const EMU3D = { inst: null, ok: false, sig: "", clear: 0, feeds: 0 };
+
+const CLEAR_BY_STATE = {
+  emu: 0x06110c, real: 0x140506, estop: 0x141003, offline: 0x080c0f
+};
+
+function initEmu3D() {
+  const host = $("#emu3d");
+  if (!host || typeof window.OSREmulator !== "function") {
+    log("没加载到 3D 模型库，先用简版视图", "cmd");
+    return false;
+  }
+  try {
+    const inst = new window.OSREmulator(host, { model: "SR6" });
+    if (inst.renderer) {
+      inst.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+      EMU3D.clear = CLEAR_BY_STATE.emu;
+      inst.renderer.setClearColor(EMU3D.clear, 1);
+    }
+    if (inst.controls) {
+      inst.controls.enableDamping = true;
+      inst.controls.dampingFactor = 0.12;
+      inst.controls.minDistance = 120;
+      inst.controls.maxDistance = 700;
+      inst.controls.saveState();
+    }
+    EMU3D.inst = inst;
+    EMU3D.ok = true;
+    document.body.classList.add("emu3d");
+        window.dispatchEvent(new Event("resize"));
+    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+
+    host.addEventListener("dblclick", () => {
+      if (inst.controls && inst.controls.reset) inst.controls.reset();
+      log("视角已复位", "ok");
+    });
+    log("3D 模型已加载（SR6）", "ok");
+    return true;
+  } catch (e) {
+    console.warn("3D 初始化失败，退回手绘视图：", e);
+    log("3D 初始化失败，用简版视图：" + (e && e.message ? e.message : e), "bad");
+    return false;
+  }
+}
+
+function feedEmu3D() {
+  const inst = EMU3D.inst;
+  if (!inst || !S.out) return;
+  if (S.real) return;              
+  const parts = [];
+  for (const k of AXES) {
+    const v = S.out[k];
+    if (v === undefined || v === null) continue;
+        const n = Math.min(9999, Math.max(0, Math.round(v * 100)));
+    parts.push(k + String(n).padStart(4, "0"));
+  }
+  if (!parts.length) return;
+  const sig = parts.join(" ");
+  if (sig === EMU3D.sig) return;
+  EMU3D.sig = sig;
+  inst.write(sig + "\n");
+  EMU3D.feeds += 1;
+}
+
+function paintEmu3D(state) {
+  const inst = EMU3D.inst;
+  if (!inst || !inst.renderer) return;
+  const c = CLEAR_BY_STATE[state];
+  if (c === undefined || c === EMU3D.clear) return;
+  EMU3D.clear = c;
+  inst.renderer.setClearColor(c, 1);
+}
+
+function bindCam() {
+  const el = $("#view");
+  const hint = $("#camHint");
+
+  el.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    CAM.drag = true;
+    CAM.lx = e.clientX;
+    CAM.ly = e.clientY;
+    el.classList.add("dragging");
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    if (hint) hint.style.opacity = "0";
+  });
+
+  el.addEventListener("pointermove", (e) => {
+    if (!CAM.drag) return;
+    const dx = e.clientX - CAM.lx;
+    const dy = e.clientY - CAM.ly;
+    CAM.lx = e.clientX;
+    CAM.ly = e.clientY;
+    CAM.yaw += dx * 0.007;
+    CAM.pitch = Math.max(-PITCH_MAX,
+                Math.min(PITCH_MAX, CAM.pitch - dy * 0.006));
+  });
+
+  const endDrag = (e) => {
+    if (!CAM.drag) return;
+    CAM.drag = false;
+    el.classList.remove("dragging");
+    try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  el.addEventListener("pointerup", endDrag);
+  el.addEventListener("pointercancel", endDrag);
+
+  el.addEventListener("wheel", (e) => {
+    e.preventDefault();                 
+    const k = Math.exp(-e.deltaY * 0.0013);
+    CAM.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, CAM.zoom * k));
+    if (hint) hint.style.opacity = "0";
+  }, { passive: false });
+
+  el.addEventListener("dblclick", () => {
+    CAM.yaw = CAM_DEF.yaw;
+    CAM.pitch = CAM_DEF.pitch;
+    CAM.zoom = CAM_DEF.zoom;
+    if (hint) hint.style.opacity = "";
+    log("视角已复位", "ok");
+  });
+}
+
+function toggleDrawer(force) {
+  const body = document.body;
+  const next = (force === undefined) ? !body.classList.contains("collapsed") : force;
+  body.classList.toggle("collapsed", next);
+  $("#btnDrawer").textContent = next ? "⟨" : "⟩";
+  setTimeout(resizeCanvas, 320);
+}
+
+buildAxisRows();
+buildPresets();
+buildSliders();
+bind();
+bindCam();
+initEmu3D();
+resizeCanvas();
+log("WebUI 已就绪，正在连接控制服务…", "cmd");
+pollLoop();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
